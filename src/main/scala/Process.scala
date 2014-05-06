@@ -1,7 +1,10 @@
 package redoctober
 
+import scala.util.Random
 import scala.collection.mutable
 import akka.actor._
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait Direction
 object East extends Direction
@@ -83,6 +86,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     resourceID = None
     resourceReleased(id)
     broadcast ! Release(processID, id, timestamp)
+    context.system.scheduler.scheduleOnce(randomInterval, self, Start)
   }
 
   def insertRequest(requestingID: Int, requestingTimestamp: Timestamp) = {
@@ -114,6 +118,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
         resourceID = Some(requestedID)
         incrementTimestamp
         broadcast ! Enter(processID, direction, requestedID, timestamp)
+        context.system.scheduler.scheduleOnce(randomInterval, self, Stop)
       } }
     }
   }
@@ -151,6 +156,8 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
       case _ => false
     }
   }
+
+  def randomInterval = Random.nextInt(3) seconds
 
   implicit val queueOrdering = Ordering[Int].on[(Int, Timestamp)](_._2.num)
 
