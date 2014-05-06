@@ -37,10 +37,10 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
 
   var state: State = Idle
   var direction: Direction = West
-  var timestamp = Timestamp(1)
+  var timestamp = Timestamp(processID + 1)
   var resourceID: Option[Int] = None
   var busy: mutable.Map[Int, (Direction, Int)] = mutable.Map()
-  var queue: mutable.PriorityQueue[(Int, Timestamp)] = new mutable.PriorityQueue[(Int, Timestamp)]()
+  var queue: mutable.ArrayBuffer[(Int, Timestamp)] = new mutable.ArrayBuffer[(Int, Timestamp)]()
   var repliesCount = 0
 
   def receive = {
@@ -79,7 +79,6 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     repliesCount = 0
     enqueue(processID, timestamp)
     broadcast ! Request(processID, timestamp)
-    println(s"Process $processID wants to go $direction")
   }
 
   def stop = {
@@ -87,6 +86,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     val id = resourceID.get
     resourceID = None
     resourceReleased(id)
+    println(s"Process $processID exited channel $id")
     broadcast ! Release(processID, id, timestamp)
     context.system.scheduler.scheduleOnce(randomInterval, self, Start)
   }
@@ -113,8 +113,6 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
   }
 
   def attemptEnter = {
-    val queued = queue.map { _._1 }.mkString(", ")
-    println(s"Process $processID attempting to enter with $repliesCount and $queued")
     if (repliesCount == processesCount - 1 && firstInQueue) {
       availableResource.map { (requestedID) => {
         processEntered(processID, direction, requestedID)
@@ -133,7 +131,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
   def availableResource: Option[Int] = {
     val empty = allResources diff busy.keys.toSet
     empty.headOption.orElse {
-      busy.find { case (id, (direction, count)) => true }
+      busy.find { case (id, (dir, count)) => dir == direction && count < limits(id) }
           .map { _._1 }
     }
   }
@@ -148,8 +146,8 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
 
   def enqueue(request: (Int, Timestamp)) = {
     removeFromQueue(request._1)
-    println(s"Enqueueing $request")
-    queue.enqueue(request)
+    val queued = queue.map { _._1 }.mkString(", ")
+    queue = (queue :+ request).sorted
   }
 
   def removeFromQueue(removedID: Int) = {
@@ -163,9 +161,9 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     }
   }
 
-  def randomInterval = Random.nextInt(3) seconds
+  def randomInterval = (Random.nextDouble() * 3).seconds
 
   implicit val queueOrdering = Ordering[Int].on[(Int, Timestamp)](_._2.num)
 
-  lazy val allResources: Set[Int] = (for { i <- 0 to processesCount-1 } yield i).toSet
+  lazy val allResources: Set[Int] = (for { i <- 0 to limits.size-1 } yield i).toSet
 }
