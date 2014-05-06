@@ -10,6 +10,11 @@ object Runner {
   def main(args: Array[String]) = {
     println("Starting RED October Simulation...")
 
+    if (args.size < 2) {
+      println("USAGE: run [process_count], [limit1, limit2, ...]")
+      System.exit(0)
+    }
+
     val arguments = args.map(_.toInt)
 
     val processesCount = arguments(0)
