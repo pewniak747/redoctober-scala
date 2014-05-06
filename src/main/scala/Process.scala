@@ -36,7 +36,7 @@ case object Stop
 class Process(val processID: Int, val processesCount: Int, val limits: Array[Int], val broadcast: ActorRef) extends Actor {
 
   var state: State = Idle
-  var direction: Direction = West
+  var direction: Direction = if (Random.nextInt(2) == 0) West else East
   var timestamp = Timestamp(processID + 1)
   var resourceID: Option[Int] = None
   var busy: mutable.Map[Int, (Direction, Int)] = mutable.Map()
@@ -161,7 +161,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     }
   }
 
-  def randomInterval = (Random.nextDouble() * 3).seconds
+  def randomInterval = (1 + Random.nextDouble() * 3).seconds
 
   implicit val queueOrdering = Ordering[Int].on[(Int, Timestamp)](_._2.num)
 
