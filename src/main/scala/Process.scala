@@ -7,8 +7,8 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 trait Direction
-object East extends Direction
-object West extends Direction
+object East extends Direction { override def toString = "east" }
+object West extends Direction { override def toString = "west" }
 
 trait State
 object Idle extends State
@@ -77,7 +77,9 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
     state = Waiting
     direction = if(direction == West) East else West
     repliesCount = 0
+    enqueue(processID, timestamp)
     broadcast ! Request(processID, timestamp)
+    println(s"Process $processID wants to go $direction")
   }
 
   def stop = {
@@ -111,7 +113,9 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
   }
 
   def attemptEnter = {
-    if (repliesCount == processesCount && firstInQueue) {
+    val queued = queue.map { _._1 }.mkString(", ")
+    println(s"Process $processID attempting to enter with $repliesCount and $queued")
+    if (repliesCount == processesCount - 1 && firstInQueue) {
       availableResource.map { (requestedID) => {
         processEntered(processID, direction, requestedID)
         state = Busy
@@ -119,6 +123,7 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
         incrementTimestamp
         broadcast ! Enter(processID, direction, requestedID, timestamp)
         context.system.scheduler.scheduleOnce(randomInterval, self, Stop)
+        println(s"Process $processID entered channel $requestedID going $direction")
       } }
     }
   }
@@ -143,11 +148,12 @@ class Process(val processID: Int, val processesCount: Int, val limits: Array[Int
 
   def enqueue(request: (Int, Timestamp)) = {
     removeFromQueue(request._1)
+    println(s"Enqueueing $request")
     queue.enqueue(request)
   }
 
   def removeFromQueue(removedID: Int) = {
-    queue = queue.filter { case (id, _) => id == removedID  }
+    queue = queue.filter { case (id, _) => id != removedID  }
   }
 
   def firstInQueue: Boolean = {
